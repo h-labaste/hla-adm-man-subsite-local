@@ -1,0 +1,77 @@
+﻿@page "/bindings"
+@using GestionSousSite.Services
+@using GestionSousSite.Data.Models
+
+<h3>Ajouter une liaison IIS à distance</h3>
+
+<div>
+    <label>Nom du serveur :</label>
+    <input @bind="ComputerName" placeholder="Nom ou IP du serveur IIS" />
+</div>
+<div>
+    <label>Nom du site :</label>
+    <input @bind="SiteName" placeholder="Nom du site IIS" />
+</div>
+<div>
+    <label>Nom d'hôte :</label>
+    <input @bind="HostName" placeholder="Nom d'hôte (ex: bidule.dev.mon-domain.com)" />
+</div>
+<div>
+    <label>Protocole :</label>
+    <select @bind="Protocol">
+        <option value="http">http</option>
+        <option value="https">https</option>
+    </select>
+</div>
+<div>
+    <label>Port :</label>
+    <input type="number" @bind="Port" placeholder="80" />
+</div>
+<div>
+    <button @onclick="AddBindingRemote">Ajouter la Liaison</button>
+</div>
+
+<p>@BindingStatusMessage</p>
+
+@code {
+    
+    private string StatusMessage = string.Empty;
+    private string BindingStatusMessage = string.Empty;
+    private string SubdomainName = string.Empty;
+
+    private string ComputerName = "192.168.1.100";
+    private string SiteName = "Dev BIDULE";
+    private string HostName = "bidule.dev.mon-domain.com";
+    private string Protocol = "http";
+    private int Port = 80;
+
+    private async Task AddBindingRemote()
+    {
+        await Task.Run(() => {
+            try
+            {
+                // Crée une instance de l'adapter via la factory
+                var adapter = PowerShellAdapterFactory.Create();
+
+                string scriptPath = Path.Combine(Directory.GetCurrentDirectory(), "Scripts", "0003--subsite-add-binding.ps1");
+                var parameters = new Dictionary<string, string>
+                {
+                    { "ComputerName", ComputerName },
+                    { "SiteName", SiteName },
+                    { "HostName", HostName },
+                    { "Protocol", Protocol },
+                    { "Port", Port.ToString() }
+                };
+
+                // Exécute le script via l'adapter
+                string result = adapter.ExecuteScript(scriptPath, parameters);
+
+                BindingStatusMessage = $"Succès : {result}";
+            }
+            catch (Exception ex)
+            {
+                BindingStatusMessage = $"Erreur : {ex.Message}";
+            }
+        });
+    }
+}

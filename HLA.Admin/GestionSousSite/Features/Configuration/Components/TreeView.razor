@@ -1,0 +1,13 @@
+﻿@typeparam TItem
+@using GestionSousSite.Features.Configuration.Models
+
+<div class="tree-view">
+    @foreach (var node in Nodes)
+    {
+        <TreeNode Node="node" />
+    }
+</div>
+
+@code {
+    [Parameter] public List<ConfigNode> Nodes { get; set; } = new();
+}

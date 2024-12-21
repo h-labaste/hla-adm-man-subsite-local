@@ -1,0 +1,276 @@
+﻿@using GestionSousSite.Features.Configuration.Models
+@using GestionSousSite.Features.Configuration.Services
+@inject RewriteRulesService RulesService
+
+<h4>Liste des règles de réécriture</h4>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>URL</th>
+            <th>Condition</th>
+            <th>Action</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var rule in RewriteRules)
+        {
+            <tr>
+                <td>@rule.Name</td>
+                <td>@rule.MatchUrl</td>
+                <td>
+                    @foreach (var condition in rule.Conditions)
+                    {
+                        <p>@condition.Input matches @condition.Pattern (Negate: @condition.Negate)</p>
+                    }
+                </td>
+                <td>@rule.ActionUrl</td>
+                <td>
+                    <button class="btn btn-primary" @onclick="() => EditRule(rule)">Modifier</button>
+                    <button class="btn btn-danger" @onclick="() => DeleteRule(rule.Name)">Supprimer</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<h4>Ajouter ou Modifier une Règle</h4>
+ <table class="table">
+    <thead>
+        <tr>
+            <th>Nom de la Règle</th>
+            <th>Type d'action</th>
+            <th>Nom de la Règle</th>
+            <th>URL d'action</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input id="ruleName" class="form-control form-control-sm" @bind="NewRule.Name" placeholder="Nom de la règle" /></td>
+            <td><input id="matchUrl" class="form-control form-control-sm" @bind="NewRule.MatchUrl" placeholder="Ex: .*" /></td>
+            <td>
+                <select id="actionType" @bind="NewRule.ActionType" class="form-select form-select-sm">
+                    <option value="Rewrite">Rewrite</option>
+                    <option value="Redirect">Redirect</option>
+                    <option value="Custom">Custom</option>
+                </select>
+            </td>
+            <td>
+                <input id="actionUrl" class="form-control form-control-sm" @bind="NewRule.ActionUrl" placeholder="Ex: /nouveau" />
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h5>Conditions</h5>
+@if (NewRule.Conditions != null && NewRule.Conditions.Any())
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Entrée</th>
+                <th>Modèle</th>
+                <th>Exclure (Negate)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var condition in NewRule.Conditions)
+            {
+                <tr>
+                    <td>
+                        <select @bind="condition.Input" class="form-select form-select-sm">
+                            <option value="{HTTP_HOST}">{HTTP_HOST}</option>
+                            <option value="{HTTPS}">{HTTPS}</option>
+                            <option value="{REQUEST_URI}">{REQUEST_URI}</option>
+                            <option value="{REMOTE_ADDR}">{REMOTE_ADDR}</option>
+                            <option value="{QUERY_STRING}">{QUERY_STRING}</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" @bind="condition.Pattern" class="form-control form-control-sm" placeholder="Ex: ^example.com$" />
+                    </td>
+                    <td>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" @bind="condition.Negate" />
+                        </div>
+                    </td>
+                    <td claas="">
+                        <button class="btn btn-danger btn-sm" @onclick="() => RemoveCondition(condition)"><span class="oi oi-x"></span></button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4">
+                    <div>
+                        <button class="btn btn-success" @onclick="AddCondition"><span class="oi oi-plus"></span></button>
+                    </div>
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+}
+else
+{
+    <p>Aucune condition ajoutée.</p>
+}
+
+<div class="d-flex justify-content-between">
+    <div class="p-2 bd-highlight">
+        <button class="btn btn-primary" @onclick="AddOrUpdateRule">Enregistrer la Règle</button>
+    </div>
+    <div class="p-2 bd-highlight">
+        <p>@FormMessage</p>
+    </div>
+    <div class="p-2 bd-highlight">
+        <button class="btn btn-sm btn-info" @onclick="ResetForm">Annuler</button>
+    </div>
+</div>
+
+
+@code {
+    [Parameter] public string WebConfigPath { get; set; } = string.Empty;
+
+    private List<RewriteRule> RewriteRules = new();
+
+    private RewriteRule NewRule = new RewriteRule
+    {
+        Name = "Redirect Example",
+        MatchUrl = ".*",
+        Conditions = new List<RewriteCondition>
+        {
+            new RewriteCondition
+            {
+                Input = "{HTTP_HOST}",
+                Pattern = "^example.com$",
+                Negate = true
+            },
+            new RewriteCondition
+            {
+                Input = "{HTTPS}",
+                Pattern = "^on$",
+                Negate = true
+            }
+        },
+        ActionType = "Rewrite",
+        ActionUrl = "/target-path"
+    };
+
+    private RewriteRule BaseRule = new RewriteRule
+    {
+        Name = "Redirect Example",
+        MatchUrl = ".*",
+        Conditions = new List<RewriteCondition>
+        {
+            new RewriteCondition
+            {
+                Input = "{HTTP_HOST}",
+                Pattern = "^example.com$",
+                Negate = true
+            },
+            new RewriteCondition
+            {
+                Input = "{HTTPS}",
+                Pattern = "^on$",
+                Negate = true
+            }
+        },
+        ActionType = "Rewrite",
+        ActionUrl = "/target-path"
+    };
+
+
+    private readonly RewriteCondition BaseCondition = new RewriteCondition
+    {
+        Input = "{HTTPS}",
+        Pattern = "^on$",
+        Negate = true
+    };
+
+    private string FormMessage = string.Empty;
+
+    private void AddCondition()
+    {
+        NewRule.Conditions.Add(BaseCondition);
+    }
+
+    private void RemoveCondition(RewriteCondition condition)
+    {
+        NewRule.Conditions.Remove(condition);
+        FormMessage = "Condition supprimée.";
+    }
+
+    private void AddOrUpdateRule()
+    {
+        try
+        {
+            // Ajouter ou mettre à jour la règle dans le fichier web.config
+            RulesService.AddOrUpdateRewriteRule(WebConfigPath, NewRule);
+
+            // Recharger les règles
+            LoadRewriteRules();
+
+            FormMessage = "Règle ajoutée ou mise à jour avec succès.";
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            FormMessage = $"Erreur lors de l'ajout de la règle : {ex.Message}";
+        }
+    }
+
+    private void ResetForm()
+    {
+        NewRule = BaseRule;
+        FormMessage = "Formulaire RESET";
+    }
+
+    protected override void OnInitialized()
+    {
+        LoadRewriteRules();
+    }
+
+    private void LoadRewriteRules()
+    {
+        RewriteRules = RulesService.GetRewriteRules(WebConfigPath);
+    }
+
+    private void AddNewRule()
+    {
+        var newRule = new RewriteRule
+        {
+            Name = "NouvelleRègle",
+            MatchUrl = ".*",
+            Conditions = new List<RewriteCondition>
+            {
+                new RewriteCondition
+                {
+                    Input = "{HTTP_HOST}",
+                    Pattern = "^nouveau.example.com$",
+                    Negate = false
+                }
+            },
+            ActionType = "Rewrite",
+            ActionUrl = "/nouveau"
+        };
+
+        RulesService.AddOrUpdateRewriteRule(WebConfigPath, newRule);
+        LoadRewriteRules();
+    }
+
+
+    private void EditRule(RewriteRule rule)
+    {
+        // Implémentez une fenêtre modale ou un formulaire pour modifier la règle
+    }
+
+    private void DeleteRule(string ruleName)
+    {
+        RulesService.DeleteRewriteRule(WebConfigPath, ruleName);
+        LoadRewriteRules();
+    }
+}

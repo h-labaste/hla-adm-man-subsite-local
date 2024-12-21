@@ -1,0 +1,24 @@
+﻿trigger: none
+
+pr: none
+
+variables:
+  ScriptPath: ''
+  Parameters: ''
+
+stages:
+  - stage: Execute
+    displayName: "Exécuter une opération PowerShell"
+    jobs:
+      - job: RunScript
+        displayName: "Exécution du script"
+        pool:
+          vmImage: 'windows-latest'
+
+        steps:
+          - task: PowerShell@2
+            displayName: "Exécuter le script $(ScriptPath)"
+            inputs:
+              targetType: 'inline'
+              script: |
+                & $(ScriptPath) $(Parameters)

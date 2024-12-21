@@ -1,0 +1,72 @@
+﻿@using GestionSousSite.Features.Configuration.Services
+@using GestionSousSite.Features.Configuration.Models
+@inject ConfigService ConfigService
+
+<h3>WebConfig Viewer</h3>
+
+<div class="tabs">
+    <button class="tab-button @(ActiveTab == "AppSettings" ? "active" : "")" @onclick='() => SwitchTab("AppSettings")'>AppSettings</button>
+    <button class="tab-button @(ActiveTab == "RewriteRules" ? "active" : "")" @onclick='() => SwitchTab("RewriteRules")'>Règles de Réécriture</button>
+</div>
+
+<div class="tab-content">
+    @if (ActiveTab == "AppSettings")
+    {
+        <div>
+            <h4>AppSettings</h4>
+            @if (AppSettings != null)
+            {
+
+                <TreeView TItem="ConfigNode" Nodes="SettingsTree.Children" />
+            }
+            else
+            {
+                <p>Chargement des appsettings...</p>
+            }
+        </div>
+    }
+    else if (ActiveTab == "RewriteRules")
+    {
+        <div>
+            @if (RewriteRules != null)
+            {
+                <RewriteRuleManager WebConfigPath="@WebConfigPath" />
+            }
+            else
+            {
+                <p>Chargement des règles...</p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string WebConfigPath { get; set; } = string.Empty;
+
+    private Dictionary<string, string>? AppSettings;
+    private List<RewriteRule>? RewriteRules;
+    private string ActiveTab { get; set; } = "AppSettings";
+
+    private ConfigNode SettingsTree = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            AppSettings = await ConfigService.GetAppSettingsAsync(WebConfigPath);
+
+            var builder = new ConfigTreeBuilder();
+            SettingsTree = builder.BuildTree(AppSettings);
+
+            RewriteRules = await ConfigService.GetRewriteRulesAsync(WebConfigPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erreur : {ex.Message}");
+        }
+    }
+    private void SwitchTab(string tabName)
+    {
+        ActiveTab = tabName;
+    }
+}

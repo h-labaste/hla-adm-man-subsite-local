@@ -1,0 +1,72 @@
+﻿@typeparam TItem
+<div class="autocomplete">
+    <input type="text" @oninput="(e) => OnSearchChanged(e)" placeholder="Rechercher..." value="@SearchText" />
+    <ul class="autocomplete-results" style="display:@(ShowSuggestions ? "block" : "none")">
+        @if (Suggestions?.Any() == true)
+        {
+            @foreach (var suggestion in Suggestions)
+            {
+                <li @onclick="() => SelectSuggestion(suggestion)">
+                    @SuggestionDisplay(suggestion)
+                </li>
+            }
+        }
+        else if (IsLoading)
+        {
+            <li>Chargement...</li>
+        }
+        else if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            <li>Aucun résultat trouvé.</li>
+        }
+    </ul>
+</div>
+
+@code {
+    [Parameter] public Func<string, Task<IEnumerable<TItem>>> SearchMethod { get; set; } = null!;
+    [Parameter] public Func<TItem, string> SuggestionDisplay { get; set; } = suggestion => suggestion?.ToString() ?? string.Empty;
+    [Parameter] public EventCallback<TItem> OnSelected { get; set; }
+
+    private string SearchText { get; set; } = string.Empty;
+    private IEnumerable<TItem>? Suggestions { get; set; }
+    private bool ShowSuggestions { get; set; }
+    private bool IsLoading { get; set; }
+
+    private async Task OnSearchChanged(ChangeEventArgs e)
+    {
+        SearchText = e.Value?.ToString() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(SearchText) || SearchMethod == null)
+        {
+            Suggestions = Enumerable.Empty<TItem>();
+            ShowSuggestions = false;
+            return;
+        }
+
+        IsLoading = true;
+        ShowSuggestions = true;
+
+        try
+        {
+            Suggestions = await SearchMethod(SearchText);
+        }
+        catch
+        {
+            Suggestions = Enumerable.Empty<TItem>();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SelectSuggestion(TItem suggestion)
+    {
+        SearchText = SuggestionDisplay(suggestion);
+        ShowSuggestions = false;
+        if (OnSelected.HasDelegate)
+        {
+            await OnSelected.InvokeAsync(suggestion);
+        }
+    }
+}

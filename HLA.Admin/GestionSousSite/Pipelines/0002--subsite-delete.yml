@@ -1,0 +1,6 @@
+﻿namespace GestionSousSite.Pipelines
+{
+    public class _0001__subsite_deploy
+    {
+    }
+}

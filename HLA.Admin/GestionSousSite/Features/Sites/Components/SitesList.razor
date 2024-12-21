@@ -1,0 +1,340 @@
+﻿@using GestionSousSite.Data.Models
+@using GestionSousSite.Services
+@using GestionSousSite.Features.Sites.Services
+@using GestionSousSite.Features.Sites.Models
+@using GestionSousSite.Components.Form
+@using GestionSousSite.Features.Configuration.Components
+@using GestionSousSite.Features.Pipelines.Components
+@inject PathsService PathsService
+@inject SitesService SitesService
+@inject AzureDevOpsService AzureDevOpsService
+@inject UserStateService UserState
+
+<p>RETOUR : @StatusMessage</p>
+
+<h3>Liste des Sous-Sites</h3>
+
+<div>
+    <label for="selectedName">Choisir le drive :</label>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Nom</th>
+                <th>Valeur</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var drive in AvailableDrives.Where(x => x.Name == SelectedDriveName || string.IsNullOrEmpty(SelectedDriveName)))
+            {
+                <tr>
+                    <th>Name</th>
+                    <td>@drive.Label</td>
+                    <td>
+                        <button class="btn btn-@(drive.Name == SelectedDriveName ? "success" : "primary")" @onclick="() => OnDriveSelected(drive.Name)" title="Selectionner">
+                            <span class="oi oi-caret-@(drive.Name == SelectedDriveName ? "bottom" : "right")" aria-hidden="true"></span>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (SelectedDrive != null)
+{
+    <p>Vous avez selectionner : @SelectedDrive.Label</p>
+    <div class="tabs">
+        <button class="tab-button @(ActiveTab == "Infos" ? "active" : "")" @onclick='() => SwitchTab("Infos")'>AppSettings</button>
+        @if (SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
+        {
+            <button class="tab-button @(ActiveTab == "WebConfigPath" ? "active" : "")" @onclick='() => SwitchTab("WebConfigPath")'>WebConfig</button>
+        }
+        <button class="tab-button @(ActiveTab == "SousDomaine" ? "active" : "")" @onclick='() => SwitchTab("SousDomaine")'>SousDomaine (@(SousSites != null ? SousSites.Count : 0))</button>
+        <button class="tab-button @(ActiveTab == "Pipelines" ? "active" : "")" @onclick='() => SwitchTab("Pipelines")'>Pipelines ()</button>
+    </div>
+    
+    <div class="tab-content">
+        @if (ActiveTab == "Infos")
+        {
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Nom</th>
+                        <th>Valeur</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Name</td>
+                        <td>@SelectedDrive.Name</td>
+                    </tr>
+                    <tr>
+                        <td>Path</td>
+                        <td>@SelectedDrive.Path</td>
+                    </tr>
+                    <tr>
+                        <td>DnsName</td>
+                        <td><a href="https://@SelectedDrive.DnsName" target="_blank">@SelectedDrive.DnsName</a></td>
+                    </tr>
+                    <tr>
+                        <td>Web.config ?</td>
+                        <td>
+                            @if (SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
+                            {
+                                <button class="btn btn-success"><span class="oi oi-circle-check"></span></button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-close"><span class="oi oi-circle-x"></span></button>
+                            }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Branche</td>
+                        <td>@SelectedBranch</td>
+                    </tr>
+                </tbody>
+            </table>
+        }
+        @if (ActiveTab == "WebConfigPath")
+        {
+            @if (SelectedDrive.IsSiteConfigured(SelectedDrive.Path) && !string.IsNullOrEmpty(WebConfigPath))
+            {
+                <WebConfig WebConfigPath="@WebConfigPath" />
+            }
+        }
+        @if (ActiveTab == "Pipelines")
+        {
+            <PipelineViewer />
+        }
+        @if (ActiveTab == "SousDomaine")
+        {
+            <div>
+                <label>Nom du Sous-Site :</label>
+                <input @bind="SubdomainName" placeholder="Ex: bidule" />
+            </div>
+            <div>
+                <label>Branche :</label>
+                <Autocomplete TItem="string"
+                              SearchMethod="LoadBranchesAsync"
+                              SuggestionDisplay="(branch => branch)"
+                              OnSelected="OnBranchSelected" />
+            </div>
+            <div>
+                <button @onclick="CreateSubsite">Créer le Sous-Site</button>
+            </div>
+
+            @if (SousSites == null || SousSites.Count == 0)
+            {
+                <p>Aucun sous-site trouvé.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>URL</th>
+                            <th>Chemin</th>
+                            <th>Web.Config ?</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var site in SousSites)
+                        {
+                            <tr>
+                                <td>@site.Name</td>
+                                <td><a href="http://@site.SubDnsName" target="_blank">@site.SubDnsName</a></td>
+                                <td><a href="@site.SubPath" target="_blank">@site.SubPath</a></td>
+                                <td>@(site.SubIsConfigured ? "Configuré" : "Non configuré")</td>
+                                <td>
+                                    @if (!site.SubIsConfigured)
+                                    {
+                                        <button class="btn btn-primary" @onclick="() => InitializeSite(site.Name)">Initialiser</button>
+                                    }
+                                    <button class="btn small btn-danger" @onclick="()=> DeleteSubsite(site.Name)">Supprimer</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+}
+else
+{
+    <p>Sélectionnez un DRIVE pour voir la liste des sous-sites.</p>
+}
+@code {
+
+    private List<DrivePathInfo> AvailableDrives = new List<DrivePathInfo>();
+    private DrivePathInfo? _selectedDrive;
+    private string _selectedName = string.Empty;
+    private string _selectedPath = string.Empty;
+    private string ActiveTab { get; set; } = "Infos";
+    private string SelectedPath
+    {
+        get => _selectedPath;
+    }
+    private string SelectedDriveName
+    {
+        get => _selectedName;
+        set
+        {
+            if (_selectedDrive == null || _selectedName != value)
+            {
+                _selectedName = value;
+                if (!string.IsNullOrEmpty(_selectedName)) 
+                {
+                    _selectedDrive = AvailableDrives.Single(x => x.Name == _selectedName);
+                    if (_selectedDrive != null)
+                    {
+                        _selectedPath = _selectedDrive.Path;
+                        OnDriveSelectionChanged();
+                    }
+                    else
+                    {
+                        StatusMessage = "ERREUR : Impossible de trouver le Drive correspondant";
+                    }
+                }
+                else
+                {
+                    _selectedDrive = null;
+                    _selectedPath = string.Empty;
+                }
+            }
+        }
+    }
+    private string SelectedBranch = string.Empty;
+    private List<string> Branches = new List<string>();
+    private DrivePathInfo? SelectedDrive
+    {
+        get => _selectedDrive;
+    }
+    private List<SousSite> SousSites = new List<SousSite>();
+
+    private string StatusMessage = string.Empty;
+    private string SubdomainName = string.Empty;
+    private string? WebConfigPath => SelectedDrive != null ? Path.Combine(SelectedDrive.Path, "web.config") : null;
+
+    protected override void OnInitialized()
+    {
+        // Charger les chemins depuis paths.json
+        AvailableDrives = PathsService.GetPaths();
+    }
+
+    protected async Task InitializedBranchesAsync()
+    {
+        try
+        {
+            if (SelectedDrive != null)
+            {
+                Branches = await AzureDevOpsService.GetBranchesAsync(SelectedDrive.Project, SelectedDrive.Repo);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Erreur lors de la récupération des branches : {ex.Message}";
+        }
+    }
+
+    protected void InitializedBranches()
+    {
+        try
+        {
+            if (SelectedDrive != null)
+            {
+                Branches = AzureDevOpsService.GetBranchesAsync(SelectedDrive.Project, SelectedDrive.Repo).Result;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Erreur lors de la récupération des branches : {ex.Message}";
+        }
+    }
+
+    private async Task<IEnumerable<string>> LoadBranchesAsync(string searchText)
+    {
+        // Charger les branches avec une recherche sur le texte saisi
+        if (SelectedDrive != null)
+        {
+            return await AzureDevOpsService.SearchBranchesAsync(searchText, SelectedDrive.Project, SelectedDrive.Repo);
+        }
+        return [];
+    }
+
+    private async void OnBranchSelected(string branchName)
+    {
+      await Task.Run(() => {
+        SelectedBranch = branchName;
+      });
+    }
+
+    private async void OnDriveSelected(string driveName)
+    {
+      await Task.Run(() => {
+            if (SelectedDriveName != driveName)
+            {
+                SelectedDriveName = driveName;
+            }
+            else
+            {
+                SelectedDriveName = string.Empty;
+            }
+        });
+    }
+
+
+    private void OnDriveSelectionChanged()
+    {
+        if (SelectedDrive != null)
+        {
+            UserState.SetSelectedDrive(SelectedDrive);
+            SousSites = SitesService.GetSousSites(SelectedDrive);
+            InitializedBranches();
+        }
+    }
+    private async Task OnDriveSelectionChangedAsync()
+    {
+        if (SelectedDrive != null)
+        {
+            UserState.SetSelectedDrive(SelectedDrive);
+            SousSites = SitesService.GetSousSites(SelectedDrive);
+            await InitializedBranchesAsync();
+        }
+    }
+
+    private async Task CreateSubsite() => await ExecuteSiteAction(() => SitesService.CreateSubsite(SubdomainName, SelectedPath));
+
+    private async Task DeleteSubsite(string subdomainName) => await ExecuteSiteAction(() => SitesService.DeleteSubsite(subdomainName, SelectedPath));
+
+    private async Task InitializeSite(string siteName) => await ExecuteSiteAction(() => SitesService.InitializeSite(siteName));
+
+    private async Task ExecuteSiteAction(Func<Task<(bool Succeeded, string StatusMessage)>> action)
+    {
+        try
+        {
+            // Exécute l'action fournie
+            var result = await action();
+
+            if (result.Succeeded)
+            {
+                // Mettre à jour la liste des sous-sites
+                await OnDriveSelectionChangedAsync();
+            }
+
+            StatusMessage = result.StatusMessage;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Erreur : {ex.Message}";
+        }
+    }
+    private void SwitchTab(string tabName)
+    {
+        ActiveTab = tabName;
+    }
+}

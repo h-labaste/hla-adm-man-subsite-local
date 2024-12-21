@@ -1,0 +1,91 @@
+﻿trigger: none
+
+pr:
+  branches:
+    include:
+    - refs/heads/CI/PROD/*
+
+jobs:
+- job: CheckTags
+  displayName: "Vérification des tags de la Pull Request"
+  pool:
+    vmImage: 'windows-latest'
+
+  steps:
+  - task: PowerShell@2
+    displayName: "Vérifier les tags de la PR"
+    inputs:
+      targetType: 'inline'
+      script: |
+        $organizationUrl = "https://dev.azure.com/$(System.CollectionId)"
+        $project = "$(System.TeamProject)"
+        $repositoryId = "$(Build.Repository.Name)"
+        $pullRequestId = "$(System.PullRequest.PullRequestId)"
+        $personalAccessToken = "$(System.AccessToken)"
+
+        $apiUrl = "$organizationUrl/$project/_apis/git/repositories/$repositoryId/pullRequests/$pullRequestId?api-version=6.0"
+        $headers = @{ Authorization = "Bearer $personalAccessToken" }
+
+        $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers -Method Get
+        $prTags = $response.labels | ForEach-Object { $_.name }
+        Write-Output "Tags trouvés dans la PR : $prTags"
+
+        $requiredTags = @("PROD", "RELEASE", "MEP", "MD")
+        $missingTags = $requiredTags | Where-Object { $_ -notin $prTags }
+
+        if ($missingTags.Count -gt 0) {
+            Write-Output "Tags manquants : $missingTags"
+            Write-Error "Cette PR ne contient pas tous les tags requis : $requiredTags"
+            exit 1
+        } else {
+            Write-Output "Tous les tags requis sont présents."
+            Write-Host "##vso[task.setvariable variable=TagsValid]true"
+        }
+
+- job: TriggerMarkdownPipeline
+  displayName: "Déclencher le pipeline Markdown"
+  dependsOn: CheckTags
+  condition: and(succeeded(), eq(variables['TagsValid'], 'true'))  # Exécuter seulement si les tags sont valides
+  pool:
+    vmImage: 'windows-latest'
+
+  steps:
+  - task: PowerShell@2
+    displayName: "Déclencher le pipeline create-md.yml"
+    inputs:
+    targetType: 'inline'
+    script: |
+        $organizationUrl = "https://dev.azure.com/$(System.CollectionId)"
+        $project = "$(System.TeamProject)"
+        $pipelineId = 42  # Remplacez par l'ID de votre pipeline 'create-md.yml'
+        $personalAccessToken = "$(System.AccessToken)"
+
+        # Construire l'URL de l'API pour démarrer un pipeline
+        $apiUrl = "$organizationUrl/$project/_apis/pipelines/$pipelineId/runs?api-version=6.0"
+
+        # Charger le pipeline `create-md.yml` avec les paramètres nécessaires
+        $body = @{
+            resources = @{
+                repositories = @{
+                    self = @{
+                        refName = "$(Build.SourceBranch)"
+                    }
+                }
+            }
+            templateParameters = @{
+                PullRequestId = "$(System.PullRequest.PullRequestId)"
+                RepositoryId = "$(Build.Repository.Name)"
+                Project = "$(System.TeamProject)"
+            }
+        } | ConvertTo-Json -Depth 10
+
+        # Authentification avec PAT
+        $headers = @{
+            Authorization = "Bearer $personalAccessToken"
+            "Content-Type" = "application/json"
+        }
+
+        # Lancer le pipeline
+        $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers -Method Post -Body $body
+        Write-Output "Pipeline déclenché avec succès : $($response.url)"
+

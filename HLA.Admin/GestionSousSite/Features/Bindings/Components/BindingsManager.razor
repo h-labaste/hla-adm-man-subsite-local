@@ -1,0 +1,49 @@
+﻿<h3>Ajouter une liaison IIS à distance</h3>
+
+<div>
+    <label>Nom du serveur :</label>
+    <input @bind="ComputerName" placeholder="Nom ou IP du serveur IIS" />
+</div>
+<div>
+    <label>Nom du site :</label>
+    <input @bind="SiteName" placeholder="Nom du site IIS" />
+</div>
+<div>
+    <label>Nom d'hôte :</label>
+    <input @bind="HostName" placeholder="Nom d'hôte (ex: bidule.dev.mon-domain.com)" />
+</div>
+<div>
+    <label>Protocole :</label>
+    <select @bind="Protocol">
+        <option value="http">http</option>
+        <option value="https">https</option>
+    </select>
+</div>
+<div>
+    <label>Port :</label>
+    <input type="number" @bind="Port" placeholder="80" />
+</div>
+<div>
+    <button @onclick="AddBinding">Ajouter la Liaison</button>
+</div>
+
+@code {
+    [Parameter]
+    public string ComputerName { get; set; } = string.Empty;
+    [Parameter]
+    public string SiteName { get; set; } = string.Empty;
+    [Parameter]
+    public string HostName { get; set; } = string.Empty;
+    [Parameter]
+    public string Protocol { get; set; } = string.Empty;
+    [Parameter]
+    public int Port { get; set; }
+
+    [Parameter]
+    public EventCallback OnAddBinding { get; set; }
+
+    private async Task AddBinding()
+    {
+        await OnAddBinding.InvokeAsync();
+    }
+}

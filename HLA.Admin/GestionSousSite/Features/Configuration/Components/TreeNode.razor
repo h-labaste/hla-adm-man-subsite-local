@@ -1,0 +1,28 @@
+﻿@using GestionSousSite.Features.Configuration.Models
+
+<div class="tree-node">
+    <div @onclick="Toggle">
+        @if (Node.HasChildren)
+        {
+            <span>@(IsExpanded ? "▼" : "▶")</span>
+        }
+        @Node.Name: @* @Node.Value *@
+    </div>
+
+    @if (IsExpanded && Node.HasChildren)
+    {
+        <div style="padding-left: 1.5em;">
+            @foreach (var child in Node.Children)
+            {
+                <TreeNode Node="child" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public ConfigNode Node { get; set; } = null!;
+    private bool IsExpanded { get; set; }
+
+    private void Toggle() => IsExpanded = !IsExpanded;
+}

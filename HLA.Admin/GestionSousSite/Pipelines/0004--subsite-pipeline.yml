@@ -1,0 +1,133 @@
+﻿trigger: none # Déclencher sur toutes les branches
+
+parameters:
+  - name: Environment
+    type: string
+    default: dev  # dev ou prod
+  - name: BuildConfiguration
+    type: string
+    default: Debug  # Debug ou Release
+  - name: BranchName
+    type: string
+    default: feature/my-branch  # Branche utilisée
+  - name: TargetPath
+    type: string
+    default: "\\\\mon-nas\\sites\\domain\\www.domain.com"  # Base pour targetpath
+  - name: ReleasePath
+    type: string
+    default: "\\\\mon-nas\\sites\\domain\\release\\dev"  # Base pour releasepath
+
+
+resources:
+  repositories:
+  - repository: self
+    type: git
+    ref: refs/head/$(BranchName)
+
+pool:
+  vmImage: 'windows-latest'  # Utilise une machine virtuelle Windows
+
+jobs:
+- job: BuildAndDeploy
+  displayName: "Build et Déploiement"
+  pool:
+    vmImage: 'windows-latest'
+
+  steps:
+  # Étape 1 : Installer NuGet
+  - task: NuGetToolInstaller@1
+    displayName: Installer NuGet
+    inputs:
+      versionSpec: 6.10.0
+
+   # Étape 2 : Checkout du code source
+  - checkout: self
+    clean: true
+    submodules: true
+    lfs: true
+    persistCredentials: true
+
+  # Étape 3 : Restaurer les dépendances NuGet
+  - task: NuGetCommand@2
+    displayName: Restaurer les packages NuGet
+    inputs:
+      restoreSolution: solution.mon-domain.sln
+
+  # Étape 4 : Compiler et appliquer Debug/Release + Dev/Prod
+  - task: VSBuild@1
+    displayName: Compiler la solution avec transformation
+    inputs:
+      solution: solution.mon-domain.sln
+      vsVersion: "17.0"
+      msbuildArgs: |
+        /p:DeployOnBuild=True
+        /p:DeployDefaultTarget=WebPublish
+        /p:WebPublishMethod=FileSystem
+        /p:DeleteExistingFiles=True
+        /p:publishUrl="$(Build.ArtifactStagingDirectory)\$(Build.BuildId)"
+        /p:Configuration=$(BuildConfiguration)
+        /p:TransformConfig=$(TransformConfig)  # Ajout de Dev ou Prod
+      platform: $(BuildPlatform)
+      configuration: $(BuildConfiguration)
+      clean: true
+  # Étape 4.1 supplémentaire : Nettoyer les artefacts générés
+  - task: PowerShell@2
+    displayName: Nettoyer les fichiers indésirables
+    inputs:
+      targetType: 'inline'
+      script: |
+        $artifactPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId)"
+        
+        # Dossiers ou fichiers à exclure
+        $excludePaths = @(
+            "bin",
+            "obj",
+            "sql"
+        )
+        
+        # Parcourir et supprimer les chemins spécifiés
+        foreach ($excludePath in $excludePaths) {
+            $fullPath = Join-Path $artifactPath $excludePath
+            if (Test-Path -Path $fullPath) {
+                Remove-Item -Path $fullPath -Recurse -Force
+                Write-Output "Supprimé : $fullPath"
+            } else {
+                Write-Output "Chemin non trouvé (ignoré) : $fullPath"
+            }
+        }
+
+        Write-Output "Nettoyage terminé."
+
+   # Étape 5 : Archiver dans ReleasePath
+  - task: PowerShell@2
+    displayName: Archiver les fichiers dans ReleasePath
+    inputs:
+      targetType: 'inline'
+      script: |
+        $releasePath = "$(ReleasePath)"
+        Write-Output "Archivage des fichiers dans : $releasePath"
+        if (!(Test-Path -Path $releasePath)) {
+            New-Item -ItemType Directory -Path $releasePath -Force
+        }
+        if (!(Test-Path -Path $releasePath\$(Build.BuildId))) {
+            New-Item -ItemType Directory -Path $releasePath\$(Build.BuildId) -Force
+        }
+        Copy-Item -Path "$(Build.ArtifactStagingDirectory)\$(Build.BuildId)\*" -Destination $releasePath\$(Build.BuildId) -Recurse -Force
+        Write-Output "Fichiers archivés vers $releasePath\$(Build.BuildId)"
+
+    # Étape 3 : Copier dans TargetPath
+  - task: PowerShell@2
+    displayName: Copier les fichiers dans TargetPath
+    inputs:
+      targetType: 'inline'
+      script: |
+        $targetPath = "$(TargetPath)"
+        Write-Output "Copie des fichiers dans : $targetPath"
+        if (!(Test-Path -Path $targetPath)) {
+            New-Item -ItemType Directory -Path $targetPath -Force
+        }
+        if (!(Test-Path -Path $targetPath\$(Build.BuildId))) {
+            New-Item -ItemType Directory -Path $targetPath\$(Build.BuildId) -Force
+        }
+        Copy-Item -Path "$releasePath\$(Build.BuildId)\*" -Destination $targetPath\$(Build.BuildId) -Recurse -Force
+        Write-Output "Fichiers copiés vers $targetPath\$(Build.BuildId)"

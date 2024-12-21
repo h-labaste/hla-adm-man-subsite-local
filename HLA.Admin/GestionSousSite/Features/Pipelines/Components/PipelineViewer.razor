@@ -1,0 +1,136 @@
+﻿@using GestionSousSite.Services
+@using Microsoft.Azure.Pipelines.WebApi
+@using Microsoft.TeamFoundation.Build.WebApi
+@inject AzureDevOpsService AzureDevOpsService
+@inject UserStateService UserState
+
+<h3>Liste des Pipelines</h3>
+
+@if (Pipelines == null)
+{
+    <p>Chargement des pipelines...</p>
+}
+else if (Pipelines.Count == 0)
+{
+    <p>Aucun pipeline trouvé.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Nom</th>
+                <th>Infos</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var pipeline in Pipelines)
+            {
+                <tr>
+                    <td>@pipeline.Name</td>
+                    <td>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Infos</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Url</td>
+                                    <td>@pipeline.Url</td>
+                                </tr>
+                                <tr>
+                                    <td>Configuration.Type</td>
+                                    <td>@pipeline.Configuration.Type.ToString()</td>
+                                </tr>
+                                <tr>
+                                    <td>Dossier</td>
+                                    <td>@pipeline.Folder</td>
+                                </tr>
+                                <tr>
+                                    <td>Liens</td>
+                                    <td>@pipeline.Links</td>
+                                </tr>
+                                <tr>
+                                    <td>Revision</td>
+                                    <td>@pipeline.Revision</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                    <td>
+                        <button class="btn btn-success" @onclick="() => RunPipelineWithParameters(pipeline.Id)">Exécuter</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="4">
+                    <p class="text-danger">@ErrorMessage</p>
+                    <p class="text-success">@SuccessMessage</p>
+                </th>
+            </tr>
+        </tfoot>
+    </table>
+}
+
+<p class="text-danger">@ErrorMessage</p>
+<p class="text-success">@SuccessMessage</p>
+
+@code {
+    private List<Pipeline> Pipelines = new List<Pipeline>();
+    private Dictionary<string, BuildDefinition> PipelinesParameters = new();
+    private string ErrorMessage = string.Empty;
+    private string SuccessMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserState.SelectedDrive == null)
+        {
+            ErrorMessage = "Aucun Drive selectionné.";
+            return;
+        }
+        try
+        {
+            Pipelines = await AzureDevOpsService.ListPipelinesAsync(UserState.SelectedDrive.Project);
+            foreach (var pipeline in Pipelines)
+            {
+                PipelinesParameters.Add($"pipeline-{pipeline.Id}", await AzureDevOpsService.GetPipelineDetailsAsync(UserState.SelectedDrive.Project, pipeline.Id));
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erreur lors du chargement des pipelines : {ex.Message}";
+        }
+    }
+
+    private async Task RunPipelineWithParameters(int pipelineId)
+    {
+        try
+        {
+            ErrorMessage = string.Empty;
+            SuccessMessage = string.Empty;
+            if (UserState.SelectedDrive == null)
+            {
+                ErrorMessage = "Aucun Drive selectionné.";
+                return;
+            }
+            if (PipelinesParameters[$"pipeline-{pipelineId}"] == null || PipelinesParameters[$"pipeline-{pipelineId}"] == null)
+            {
+                ErrorMessage = "veuillez fournir des paramètres pour le pipeline.";
+                return;
+            }
+            @* PipelinesParameters[pipelineId] *@
+            await AzureDevOpsService.TriggerPipelineWithParametersAsync(UserState.SelectedDrive.Project, pipelineId, []);
+            SuccessMessage = "pipeline exécuté avec les paramètres fournis.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erreur lors de l'exécution du pipeline avec paramètres : {ex.Message}";
+        }
+    }
+}

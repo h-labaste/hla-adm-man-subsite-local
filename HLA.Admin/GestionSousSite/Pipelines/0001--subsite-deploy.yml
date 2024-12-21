@@ -1,0 +1,51 @@
+﻿trigger: none
+
+pr: none
+
+variables:
+  SiteName: ''
+  TargetPath: ''
+  Branch: 'main'
+
+stages:
+  - stage: Deploy
+    displayName: "Déployer le sous-site"
+    jobs:
+      - job: DeploySubsite
+        displayName: "Déploiement du sous-site"
+        pool:
+          vmImage: 'windows-latest'
+
+        steps:
+          - task: UseDotNet@2
+            displayName: "Installer .NET Core SDK"
+            inputs:
+              packageType: 'sdk'
+              version: '6.x'
+
+          - task: PowerShell@2
+            displayName: "Cloner la branche Git"
+            inputs:
+              targetType: 'inline'
+              script: |
+                git clone -b $(Branch) https://dev.azure.com/votre-organisation/votre-projet/_git/votre-repository $(Agent.TempDirectory)\$(SiteName)
+
+          - task: PowerShell@2
+            displayName: "Copier les fichiers vers $(TargetPath)"
+            inputs:
+              targetType: 'inline'
+              script: |
+                Copy-Item -Path "$(Agent.TempDirectory)\$(SiteName)\*" -Destination "$(TargetPath)" -Recurse -Force
+
+          - task: PowerShell@2
+            displayName: "Configurer le fichier web.config"
+            inputs:
+              targetType: 'inline'
+              script: |
+                $webConfigPath = "$(TargetPath)\web.config"
+                if (-Not (Test-Path -Path $webConfigPath)) {
+                    New-Item -ItemType File -Path $webConfigPath
+                    Add-Content -Path $webConfigPath -Value "<configuration><system.webServer><rewrite><rules></rules></rewrite></system.webServer></configuration>"
+                }
+                Write-Output "Fichier web.config configuré."
+
