@@ -1,0 +1,125 @@
+﻿@using GestionSousSite.Components.Form
+@using GestionSousSite.Features.Pipelines.Models
+@using GestionSousSite.Services
+@using Microsoft.Azure.Pipelines.WebApi
+@using Microsoft.TeamFoundation.Build.WebApi
+@using MudBlazor
+@inject AzureDevOpsService AzureDevOpsService
+@inject UserStateService UserState
+
+<h3>Configurer et Générer un Drive</h3>
+
+<MudPaper Class="pa-4">
+    <Autocomplete TItem="Pipeline"
+                  SearchMethod="SearchPipelinesAsync"
+                  SuggestionDisplay="pipeline => pipeline.Name"
+                  OnSelected="OnPipelineSelected" />
+
+    @if (SelectedPipeline != null && SelectedPipelineParameters != null)
+    {
+        <h4>Pipeline sélectionnée : @SelectedPipeline.Name</h4>
+        <MudForm Model="PipelineFormModel" @ref="PipelineForm" Validated="HandleValidation">
+            @foreach (var param in SelectedPipelineParameters)
+            {
+                <MudTextField T="string"
+                              Label="@param.Name"
+                              Placeholder="@param.DefaultValue"
+                              Immediate="true" />
+            }
+
+            <MudButton OnClick="RunPipeline" Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!PipelineForm?.IsValid??false)">Lancer la Pipeline</MudButton>
+        </MudForm>
+    }
+    else if (SelectedPipeline == null)
+    {
+        <MudAlert Severity="Severity.Info">Veuillez sélectionner une pipeline.</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning">Aucune pipeline sélectionnée ou aucun paramètre disponible.</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    private Pipeline? SelectedPipeline;
+    private List<PipelineParameter>? SelectedPipelineParameters;
+    private Dictionary<string, string> PipelineFormModel = new Dictionary<string, string>();
+    private MudForm? PipelineForm;
+
+    private async Task<IEnumerable<Pipeline>> SearchPipelinesAsync(string searchText)
+    {
+        if (UserState.SelectedDrive == null)
+        {
+            return Enumerable.Empty<Pipeline>();
+        }
+
+        try
+        {
+            // Rechercher les pipelines correspondant au texte saisi
+            var pipelines = await AzureDevOpsService.ListPipelinesAsync(UserState.SelectedDrive.Project);
+            return pipelines.Where(p => p.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erreur lors de la recherche des pipelines : {ex.Message}");
+            return Enumerable.Empty<Pipeline>();
+        }
+    }
+
+    private async Task OnPipelineSelected(Pipeline pipeline)
+    {
+        SelectedPipeline = pipeline;
+
+        if (SelectedPipeline != null && UserState.SelectedDrive != null)
+        {
+            try
+            {
+                // Charger les paramètres de la pipeline sélectionnée
+                SelectedPipelineParameters = await AzureDevOpsService.GetPipelineParametersAsync(UserState.SelectedDrive.Project, SelectedPipeline.Id);
+
+                // Initialiser le modèle avec les valeurs par défaut
+                PipelineFormModel.Clear();
+                foreach (var param in SelectedPipelineParameters)
+                {
+                    PipelineFormModel[param.Name] = param.DefaultValue;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erreur lors du chargement des paramètres de la pipeline : {ex.Message}");
+                SelectedPipelineParameters = null;
+            }
+        }
+    }
+
+    private async Task RunPipeline()
+    {
+        if (SelectedPipeline == null || SelectedPipelineParameters == null || UserState.SelectedDrive == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Appeler la pipeline avec les paramètres fournis
+            await AzureDevOpsService.TriggerPipelineWithParametersAsync(
+                UserState.SelectedDrive.Project,
+                SelectedPipeline.Id,
+                PipelineFormModel
+            );
+            Console.WriteLine("Pipeline exécutée avec succès.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erreur lors de l'exécution de la pipeline : {ex.Message}");
+        }
+    }
+
+    private void HandleValidation()
+    {
+        if (PipelineForm?.IsValid == true)
+        {
+            Console.WriteLine("Formulaire validé.");
+        }
+    }
+}

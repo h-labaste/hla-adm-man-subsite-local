@@ -2,18 +2,35 @@
 
 public class UserStateService
 {
-    // Stocker le Drive sélectionné pour l'utilisateur
-    public DrivePathInfo? SelectedDrive { get; private set; }
+  public event Action? OnStateChange;
 
-    // Méthode pour définir le Drive sélectionné
-    public void SetSelectedDrive(DrivePathInfo drive)
-    {
-        SelectedDrive = drive;
-    }
+  private DrivePathInfo? _selectedDrive;
 
-    // Méthode pour réinitialiser l'état
-    public void Reset()
+  public UserStateService()
+  {
+
+  }
+
+  public DrivePathInfo? SelectedDrive
+  {
+    get => _selectedDrive;
+    private set
     {
-        SelectedDrive = null;
+      _selectedDrive = value;
+      NotifyStateChanged();
     }
+  }
+
+  public void SetSelectedDrive(DrivePathInfo drive)
+  {
+    SelectedDrive = drive;
+  }
+
+  public void Reset()
+  {
+    SelectedDrive = null;
+  }
+
+  private void NotifyStateChanged() => OnStateChange?.Invoke();
 }
+

@@ -7,7 +7,7 @@ namespace GestionSousSite.Services
 
   public class PathsService
   {
-    private readonly string pathsFile = Path.Combine(Directory.GetCurrentDirectory(), "Config", "paths.json");
+    private readonly string pathsFile = Path.Combine(Directory.GetCurrentDirectory(), "Config", "paths.perso.json");
 
     public List<DrivePathInfo> GetPaths()
     {

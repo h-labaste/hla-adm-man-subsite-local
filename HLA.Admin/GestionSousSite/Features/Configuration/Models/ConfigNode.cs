@@ -2,7 +2,7 @@
 {
   public class ConfigNode
   {
-    public string Name { get; set; } = string.Empty; 
+    public string Name { get; set; } = string.Empty;
     public string Separator { get; set; } = string.Empty; // Séparateur utilisé pour ce segment
 
     public string? Value { get; set; } // Si c'est un nœud feuille

@@ -78,7 +78,7 @@
       {
         throw new InvalidOperationException($"Erreur La section <rewrite> est introuvable dans le fichier web.config.");
       }
-        // Accéder à la section <rules>
+      // Accéder à la section <rules>
       XElement? rulesSection = rewriteSection.Element("rules");
       if (rulesSection == null)
       {
@@ -96,7 +96,7 @@
       }
 
       // Ajouter la nouvelle règle
-      XElement newRuleElement = new XElement("rule",
+      XElement newRuleElement = new("rule",
           new XAttribute("name", rule.Name),
           new XAttribute("stopProcessing", "true"),
           new XElement("match", new XAttribute("url", rule.MatchUrl)),

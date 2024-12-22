@@ -1,7 +1,6 @@
-﻿using GestionSousSite.Features.Configuration.Components;
-using GestionSousSite.Features.Configuration.Models;
+﻿using GestionSousSite.Features.Configuration.Models;
+
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 
 namespace GestionSousSite.Features.Configuration.Services
 {

@@ -1,21 +1,21 @@
-using GestionSousSite.Data;
 using GestionSousSite.Features.Configuration.Services;
 using GestionSousSite.Features.Sites.Services;
 using GestionSousSite.Services;
 
+using MudBlazor.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 if (builder == null)
   return;
-
-// Azure Dev Ops Int�gration
+// Azure Dev Ops Intégration
 builder.Services.AddSingleton<AzureDevOpsService>(provider =>
 {
   string personalAccessToken = builder.Configuration["AzureDevOps_PAT"]
-    ?? throw new ArgumentNullException(nameof(personalAccessToken), 
+    ?? throw new ArgumentNullException(nameof(personalAccessToken),
     "AzureDevOps_PAT est manquant dans la configuration.");
 
   string personalOrganization = builder.Configuration["AzureDevOps_ORG"]
-    ?? throw new ArgumentNullException(nameof(personalOrganization), 
+    ?? throw new ArgumentNullException(nameof(personalOrganization),
     "AzureDevOps_ORG est manquant dans la configuration.");
 
   return new AzureDevOpsService(personalOrganization, personalAccessToken);
@@ -34,6 +34,9 @@ builder.Services.AddScoped<UserStateService>();
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+
+// Services - Packages
+builder.Services.AddMudServices();
 
 
 var app = builder.Build();

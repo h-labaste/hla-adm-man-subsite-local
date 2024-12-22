@@ -1,6 +1,8 @@
 ﻿@using GestionSousSite.Services
+@using GestionSousSite.Features.Pipelines.Models
 @using Microsoft.Azure.Pipelines.WebApi
 @using Microsoft.TeamFoundation.Build.WebApi
+@using MudBlazor
 @inject AzureDevOpsService AzureDevOpsService
 @inject UserStateService UserState
 
@@ -16,76 +18,131 @@ else if (Pipelines.Count == 0)
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Nom</th>
-                <th>Infos</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var pipeline in Pipelines)
-            {
+    <MudExpansionPanels MultiExpansion="true">
+    @foreach (var pipeline in Pipelines)
+    {
+        <MudExpansionPanel Text="@pipeline.Name">
+        <table class="table">
+            <thead>
                 <tr>
-                    <td>@pipeline.Name</td>
-                    <td>
+                    <th colspan="3"></th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="2">
+                        <MudAlert Severity="Severity.Normal">
+                            <MudChip T="string" Disabled="true" Variant="Variant.Outlined">Revision : @pipeline.Revision</MudChip>
+                            @if (pipeline.Configuration != null)
+                            {
+                                <MudChip T="string" Disabled="true" Variant="Variant.Outlined">ConfType : @pipeline..Configuration.Type.ToString() </MudChip>
+                            }
+                        </MudAlert>
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Nom</th>
-                                    <th>Infos</th>
+                                    <th colspan="2">
+                                        Infos
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
                                     <td>Url</td>
-                                    <td>@pipeline.Url</td>
-                                </tr>
-                                <tr>
-                                    <td>Configuration.Type</td>
-                                    <td>@pipeline.Configuration.Type.ToString()</td>
+                                    <td><a href="@pipeline.Url" target="_blank">Voir sur AzureDevOps</a></td>
                                 </tr>
                                 <tr>
                                     <td>Dossier</td>
                                     <td>@pipeline.Folder</td>
                                 </tr>
                                 <tr>
-                                    <td>Liens</td>
-                                    <td>@pipeline.Links</td>
-                                </tr>
-                                <tr>
-                                    <td>Revision</td>
-                                    <td>@pipeline.Revision</td>
+                                    <td>Liens (@pipeline.Links.Links.Count)</td>
+                                    <td>
+                                        <MudSimpleTable Dense="@dense" Hover="@hover" Bordered="@bordered" Striped="@striped" Style="overflow-x: auto;">
+                                            <tbody >
+                                                @foreach (var kvp in pipeline.Links.Links)
+                                                {
+                                                    <tr>
+                                                        <th>@kvp.Key:</th>
+                                                        <td>@kvp.Value</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </MudSimpleTable>
+                                        <MudToolBar>
+                                            <MudSwitch @bind-Value="hover" Color="Color.Primary">Hover</MudSwitch>
+                                            <MudSwitch @bind-Value="dense" Color="Color.Secondary">Dense</MudSwitch>
+                                            <MudSwitch @bind-Value="striped" Color="Color.Tertiary">Striped</MudSwitch>
+                                            <MudSwitch @bind-Value="bordered" Color="Color.Warning">Bordered</MudSwitch>
+                                        </MudToolBar>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </td>
                     <td>
+                        @if (PipelinesParametersNew.ContainsKey($"pipeline-{pipeline.Id}"))
+                        {
+                        <MudSimpleTable Dense="@dense" Hover="@hover" Bordered="@bordered" Striped="@striped" Style="overflow-x: auto;">
+                            <thead>
+                                <tr>
+                                    <th>Parametres (@PipelinesParametersNew[$"pipeline-{pipeline.Id}"].Count)</th>
+                                    <td>DefaultValue</td>
+                                    <td>Type</td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var kvp in PipelinesParametersNew[$"pipeline-{pipeline.Id}"])
+                                {
+                                    <tr>
+                                        <th>@kvp.Name</th>
+                                        <td>@kvp.DefaultValue</td>
+                                        <td>@kvp.Type</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                        <MudToolBar>
+                            <MudSwitch @bind-Value="hover" Color="Color.Primary">Hover</MudSwitch>
+                            <MudSwitch @bind-Value="dense" Color="Color.Secondary">Dense</MudSwitch>
+                            <MudSwitch @bind-Value="striped" Color="Color.Tertiary">Striped</MudSwitch>
+                            <MudSwitch @bind-Value="bordered" Color="Color.Warning">Bordered</MudSwitch>
+                        </MudToolBar>
+                        }
+                    </td>
+                    <td>
                         <button class="btn btn-success" @onclick="() => RunPipelineWithParameters(pipeline.Id)">Exécuter</button>
                     </td>
                 </tr>
-            }
-        </tbody>
-        <tfoot>
-            <tr>
-                <th colspan="4">
-                    <p class="text-danger">@ErrorMessage</p>
-                    <p class="text-success">@SuccessMessage</p>
-                </th>
-            </tr>
-        </tfoot>
-    </table>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="4">
+                        <p class="text-danger">@ErrorMessage</p>
+                        <p class="text-success">@SuccessMessage</p>
+                    </th>
+                </tr>
+            </tfoot>
+        </table>
+        </MudExpansionPanel>
+    }
+    </MudExpansionPanels>
 }
-
 <p class="text-danger">@ErrorMessage</p>
 <p class="text-success">@SuccessMessage</p>
 
 @code {
     private List<Pipeline> Pipelines = new List<Pipeline>();
     private Dictionary<string, BuildDefinition> PipelinesParameters = new();
+    private Dictionary<string, List<PipelineParameter>> PipelinesParametersNew = new();
     private string ErrorMessage = string.Empty;
     private string SuccessMessage = string.Empty;
+
+    private bool dense = false;
+    private bool hover = true;
+    private bool striped = false;
+    private bool bordered = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,7 +156,7 @@ else
             Pipelines = await AzureDevOpsService.ListPipelinesAsync(UserState.SelectedDrive.Project);
             foreach (var pipeline in Pipelines)
             {
-                PipelinesParameters.Add($"pipeline-{pipeline.Id}", await AzureDevOpsService.GetPipelineDetailsAsync(UserState.SelectedDrive.Project, pipeline.Id));
+                PipelinesParametersNew.Add($"pipeline-{pipeline.Id}", await AzureDevOpsService.GetPipelineParametersAsync(UserState.SelectedDrive.Project, pipeline.Id));
             }
         }
         catch (Exception ex)
@@ -119,13 +176,17 @@ else
                 ErrorMessage = "Aucun Drive selectionné.";
                 return;
             }
-            if (PipelinesParameters[$"pipeline-{pipelineId}"] == null || PipelinesParameters[$"pipeline-{pipelineId}"] == null)
+            if (PipelinesParametersNew[$"pipeline-{pipelineId}"] == null || PipelinesParametersNew[$"pipeline-{pipelineId}"] == null)
             {
                 ErrorMessage = "veuillez fournir des paramètres pour le pipeline.";
                 return;
             }
-            @* PipelinesParameters[pipelineId] *@
-            await AzureDevOpsService.TriggerPipelineWithParametersAsync(UserState.SelectedDrive.Project, pipelineId, []);
+            await AzureDevOpsService.TriggerPipelineWithParametersAsync(
+                                        UserState.SelectedDrive.Project,
+                                        pipelineId,
+                                        PipelinesParametersNew[$"pipeline-{pipelineId}"]
+                                            .Select(x => new KeyValuePair<string, string>(x.Name, x.DefaultValue))
+                                            .ToDictionary());
             SuccessMessage = "pipeline exécuté avec les paramètres fournis.";
         }
         catch (Exception ex)

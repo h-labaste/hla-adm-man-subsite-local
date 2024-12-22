@@ -1,6 +1,6 @@
-﻿using System.Xml;
+﻿using GestionSousSite.Features.Configuration.Models;
 
-using GestionSousSite.Features.Configuration.Models;
+using System.Xml;
 
 namespace GestionSousSite.Features.Configuration.Services
 {
@@ -15,7 +15,8 @@ namespace GestionSousSite.Features.Configuration.Services
     /// </summary>
     public async Task<Dictionary<string, string>> GetAppSettingsAsync(string webConfigPath)
     {
-      return await Task.Run(() => {
+      return await Task.Run(() =>
+      {
         if (!File.Exists(webConfigPath))
         {
           throw new FileNotFoundException($"Le fichier {webConfigPath} est introuvable.");
@@ -59,7 +60,8 @@ namespace GestionSousSite.Features.Configuration.Services
     /// </summary>
     public async Task<List<RewriteRule>> GetRewriteRulesAsync(string webConfigPath)
     {
-      return await Task.Run(() => {
+      return await Task.Run(() =>
+      {
         if (!File.Exists(webConfigPath))
         {
           throw new FileNotFoundException($"Le fichier {webConfigPath} est introuvable.");

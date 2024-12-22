@@ -272,3 +272,5 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/HLA.Admin/GestionSousSite/Config/paths.perso.json
+/HLA.Admin/GestionSousSite/appsettings.Development.json

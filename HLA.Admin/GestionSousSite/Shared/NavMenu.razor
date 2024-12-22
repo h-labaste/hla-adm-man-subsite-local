@@ -1,34 +1,22 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">GestionSousSite</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
+﻿@using MudBlazor
+<MudAppBar Color="Color.Primary" Elevation="2">
+    <MudText Typo="Typo.h6" Class="ml-2">GestionSousSite</MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" OnClick="@ToggleDrawer" />
+</MudAppBar>
 
-<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="oi oi-home" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="bindings">
-                <span class="oi oi-plus" aria-hidden="true"></span> Bindings
-            </NavLink>
-        </div>
-    </nav>
-</div>
+<MudDrawer Open="@drawerOpen" ClipMode="DrawerClipMode.Always" Variant="DrawerVariant.Responsive">
+    <MudNavMenu>
+        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+        <MudNavLink Href="bindings" Icon="@Icons.Material.Filled.Add">Bindings</MudNavLink>
+    </MudNavMenu>
+</MudDrawer>
 
 @code {
-    private bool collapseNavMenu = true;
+    private bool drawerOpen = true;
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
+    private void ToggleDrawer()
     {
-        collapseNavMenu = !collapseNavMenu;
+        drawerOpen = !drawerOpen;
     }
 }

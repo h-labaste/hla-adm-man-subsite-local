@@ -1,0 +1,322 @@
+# Description visible dans Azure DevOps
+description: >
+  Ce pipeline construit et déploie l'application pour l'environnement spécifié.
+  Propriétaire : Équipe DevOps.
+  Contact : devops@example.com
+
+# Déclencheur
+trigger: none # Déclencher sur toutes les branches
+
+# Parametres
+parameters:
+  - name: Environment
+    type: string
+    default: dev  # dev recette, preprod, prod 
+  - name: BuildConfiguration
+    type: string
+    default: Debug  # Debug ou Release
+  - name: BuildPlatform
+    type: string
+    default: Any CPU # Any CPU ou x86, x64
+  - name: BranchName
+    type: string
+    default: master  # Branche utilisée
+  - name: TargetPath
+    type: string
+    default: ""  # Base pour targetpath (\\\\frnopc024\\SitesWeb\\Nomade\\www.nomade-aventure.com)
+  - name: ReleasePath
+    type: string
+    default: ""  # Base pour releasepath (\\\\frnopc024\\SitesWeb\\Nomade\\release.nomade-aventure.com)
+
+# Ressources
+resources:
+  repositories:
+  - repository: self
+    type: git
+    ref: refs/head/$(BranchName)
+
+# Pool
+pool:
+  name: Nomade
+  
+# Jobs
+jobs:
+- job: BuildAndDeploy
+  displayName: "Build et Déploiement"
+
+  steps:
+  # Étape 1 : Installer NuGet
+  - task: NuGetToolInstaller@1
+    displayName: Installer NuGet
+    inputs:
+      versionSpec: 6.12.1
+
+   # Étape 2 : Checkout du code source
+  - checkout: self
+    clean: true
+    submodules: true
+    lfs: true
+    persistCredentials: true
+
+  # Étape 3 : Restaurer les dépendances NuGet
+  - task: NuGetCommand@2
+    displayName: Restaurer les packages NuGet
+    inputs:
+      restoreSolution: www.nomade-aventure.com.sln
+
+  # Étape 4 : Compiler et appliquer Debug/Release + Dev/Prod
+  - task: VSBuild@1
+    displayName: Compiler la solution avec transformation
+    inputs:
+      solution: www.nomade-aventure.com.sln
+      vsVersion: "17.0"
+      msbuildArgs: >
+        /p:DeployOnBuild=True /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=FileSystem 
+        /p:DeleteExistingFiles=True /p:publishUrl="$(Build.ArtifactStagingDirectory)\$(Build.BuildId)" 
+        /p:Configuration=${{ parameters.BuildConfiguration }} /p:TransformConfig=${{ parameters.Environment }}
+        /p:Platform=${{ parameters.BuildPlatform }}
+
+      platform: ${{ parameters.BuildPlatform }}
+      configuration: ${{ parameters.BuildConfiguration }}
+      clean: true
+  # Étape 5 supplémentaire : Nettoyer les artefacts générés
+  - task: PowerShell@2
+    displayName: Nettoyer les fichiers indésirables
+    inputs:
+      targetType: 'inline'
+      script: |
+        $artifactPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId)"
+        
+        # Dossiers ou fichiers à exclure
+        $excludePaths = @(
+            "bin",
+            "obj",
+            "static/sass",
+            "static/template",
+            "static/js/bundle_app",
+            "static/css_old",
+            "nomade",
+            "sql",
+            "f-*"
+        )
+        
+        # Parcourir et supprimer les chemins spécifiés
+        foreach ($excludePath in $excludePaths) {
+            $fullPath = Join-Path $artifactPath $excludePath
+            if (Test-Path -Path $fullPath) {
+                Remove-Item -Path $fullPath -Recurse -Force
+                Write-Output "Supprimé : $fullPath"
+            } else {
+                Write-Output "Chemin non trouvé (ignoré) : $fullPath"
+            }
+        }
+
+        Write-Output "Nettoyage terminé."
+
+  # Étape 6 : Compresser les fichiers générés dans une archive ZIP
+  - task: PowerShell@2
+    displayName: "Compresser les fichiers en archive ZIP"
+    inputs:
+      targetType: 'inline'
+      script: |
+        # Chemin des fichiers générés
+        $buildOutput = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId)"
+        # Chemin du fichier ZIP
+        $zipPath = "$buildOutput.zip"
+        # Vérifier que le répertoire de sortie existe
+        if (!(Test-Path -Path $buildOutput)) {
+          Write-Host "ERREUR : Les fichiers générés n'existent pas à $buildOutput"
+          exit 1
+        }
+
+        # Compresser les fichiers
+        Compress-Archive -Path "$buildOutput\*" -DestinationPath $zipPath -Force
+        Write-Host "Fichiers compressés avec succès dans : $zipPath"
+
+
+  # Étape 7 : Publier les artefacts dans Azure DevOps
+  - task: PublishBuildArtifacts@1
+    displayName: Publier les artefacts dans Azure DevOps
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)\$(Build.BuildId).zip'
+      ArtifactName: 'DeployPackage'
+      publishLocation: 'Container'
+        
+  # Étape 8 : Archiver les fichiers dans ReleasePath (inclut le fichier .zip)
+  - task: PowerShell@2
+    displayName: Copier les fichiers dans ReleasePath
+    inputs:
+      targetType: 'inline'
+      script: |
+        $releasePath = "${{ parameters.ReleasePath }}"
+        Write-Output "Vérification du contenu du répertoire : $releasePath"
+
+        # Vérifier si le répertoire contient des fichiers
+        if (!(Test-Path -Path $releasePath) -or (Get-ChildItem -Path $releasePath -Recurse | Measure-Object).Count -eq 0) {
+            Write-Output "Aucun fichier trouvé dans $releasePath. Passage à l'étape suivante."
+            exit 0
+        }
+        Write-Output "Archivage des fichiers dans : $releasePath"
+        if (!(Test-Path -Path $releasePath)) {
+            New-Item -ItemType Directory -Path $releasePath -Force
+        }
+        if (!(Test-Path -Path $releasePath\$(Build.BuildId))) {
+            New-Item -ItemType Directory -Path $releasePath\$(Build.BuildId) -Force
+        }
+        # Inclure le fichier ZIP
+        $zipPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId).zip"
+        if (Test-Path -Path $zipPath) {
+            Copy-Item -Path $zipPath -Destination $releasePath\$(Build.BuildId) -Force
+            Write-Output "ZIP ajouté : $zipPath"
+        }
+        Write-Output "Fichiers archivés vers $releasePath\$(Build.BuildId)"
+
+  # Étape 9 : Copier les fichiers dans TargetPath (inclut le fichier .zip)
+  - task: PowerShell@2
+    displayName: Copier les fichiers dans TargetPath
+    inputs:
+      targetType: 'inline'
+      script: |
+        $targetPath = "${{ parameters.TargetPath }}"
+        Write-Output "Vérification du contenu du répertoire : $targetPath"
+
+        # Vérifier si le répertoire contient des fichiers
+        if (!(Test-Path -Path $targetPath) -or (Get-ChildItem -Path $targetPath -Recurse | Measure-Object).Count -eq 0) {
+            Write-Output "Aucun fichier trouvé dans $targetPath. Passage à l'étape suivante."
+            exit 0
+        }
+        Write-Output "Copie des fichiers dans : $targetPath"
+        if (!(Test-Path -Path $targetPath)) {
+            New-Item -ItemType Directory -Path $targetPath -Force
+        }
+        if (!(Test-Path -Path $targetPath\$(Build.BuildId))) {
+            New-Item -ItemType Directory -Path $targetPath\$(Build.BuildId) -Force
+        }
+        # Inclure le fichier ZIP
+        $zipPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId).zip"
+        if (Test-Path -Path $zipPath) {
+            Copy-Item -Path $zipPath -Destination $targetPath\$(Build.BuildId) -Force
+            Write-Output "ZIP ajouté : $zipPath"
+        }
+        Write-Output "Fichiers copiés vers $targetPath\$(Build.BuildId)"
+
+  # Étape 10 : Nettoyer les fichiers après traitement
+  - task: PowerShell@2
+    displayName: Nettoyer les fichiers de l'artefact et autres fichiers temporaires
+    inputs:
+      targetType: 'inline'
+      script: |
+        Write-Output "Démarrage du nettoyage des fichiers temporaires et artefacts..."
+
+        # Répertoire d'artefacts
+        $artifactPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId)"
+
+        # Supprimer tous les fichiers de l'artefact sauf ceux nécessaires (si nécessaire)
+        if (Test-Path -Path $artifactPath) {
+            Remove-Item -Path $artifactPath\* -Recurse -Force
+            Write-Output "Artefacts nettoyés : $artifactPath"
+        } else {
+            Write-Output "Aucun artefact à nettoyer."
+        }
+
+        # Répertoire de build
+        $buildOutputPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId)"
+        if (Test-Path -Path $buildOutputPath) {
+            Remove-Item -Path $buildOutputPath -Recurse -Force
+            Write-Output "Répertoire de build nettoyé : $buildOutputPath"
+        } else {
+            Write-Output "Aucun répertoire de build à nettoyer."
+        }
+        
+        Write-Output "Vérification du contenu du répertoire : $targetPath"
+
+        # Vérifier si la variable $releasePath est vide ou contient uniquement des espaces
+        if ([string]::IsNullOrWhiteSpace($releasePath)) {
+            Write-Output "La variable ReleasePath est vide ou non définie. Passage à l'étape suivante."
+            exit 0
+        }
+        # Supprimer le fichier ZIP de la racine
+        $zipPath = "$(Build.ArtifactStagingDirectory)\$(Build.BuildId).zip"
+        if (Test-Path -Path $zipPath) {
+            Remove-Item -Path $zipPath -Force
+            Write-Output "ZIP supprimé : $zipPath"
+        } else {
+            Write-Output "Aucun fichier ZIP trouvé à supprimer."
+        }
+
+        Write-Output "Nettoyage terminé avec succès."
+
+  # Étape Final : Extraire le fichier ZIP sur la target
+  - task: PowerShell@2
+    displayName: Extraire le fichier ZIP
+    inputs:
+      targetType: 'inline'
+      script: |
+        # Chemin du fichier ZIP à extraire
+        $zipPath = "$(Build.ArtifactStagingDirectory)\DeployPackage.zip"
+    
+        # Chemin du répertoire où extraire les fichiers
+        $targetPath = "${{ parameters.TargetPath }}"
+
+        # Vérifier si le fichier ZIP existe
+        if (!(Test-Path -Path $zipPath)) {
+            Write-Output "ERREUR : Le fichier ZIP n'existe pas à $zipPath"
+            exit 1
+        }
+
+        # Extraire les fichiers
+        Expand-Archive -Path $zipPath -DestinationPath $targetPath\ -Force
+        Write-Output "Fichiers extraits dans : $extractPath"
+
+## A FAIRE
+# stages:
+
+# - stage: Build
+#   displayName: "Compilation"
+#   jobs:
+#   - job: BuildAndPrepare
+#     displayName: "Préparation et Compilation"
+#     steps:
+#     - task: NuGetToolInstaller@1
+#       displayName: Installer NuGet
+#     - checkout: self
+#     - task: NuGetCommand@2
+#       displayName: Restaurer les packages NuGet
+#     - task: VSBuild@1
+#       displayName: Compiler la solution avec transformation
+
+# - stage: Package
+#   displayName: "Préparation des Artefacts"
+#   dependsOn: Build
+#   jobs:
+#   - job: PackageArtifacts
+#     displayName: "Nettoyage et Packaging"
+#     steps:
+#     - task: PowerShell@2
+#       displayName: Nettoyer les fichiers indésirables
+#     - task: PowerShell@2
+#       displayName: Compresser les fichiers en archive ZIP
+
+# - stage: Publish
+#   displayName: "Publication des Artefacts"
+#   dependsOn: Package
+#   jobs:
+#   - job: PublishArtifacts
+#     displayName: "Publication et Déploiement"
+#     steps:
+#     - task: PublishBuildArtifacts@1
+#       displayName: Publier les artefacts dans Azure DevOps
+#     - task: PowerShell@2
+#       displayName: Copier les fichiers dans ReleasePath
+
+# - stage: Deploy
+#   displayName: "Déploiement"
+#   dependsOn: Publish
+#   jobs:
+#   - job: DeployToTarget
+#     displayName: "Extraire et Déployer"
+#     steps:
+#     - task: PowerShell@2
+#       displayName: Extraire le fichier ZIP sur la cible
+#     - task: PowerShell@2
+#       displayName: Nettoyer les fichiers temporaires

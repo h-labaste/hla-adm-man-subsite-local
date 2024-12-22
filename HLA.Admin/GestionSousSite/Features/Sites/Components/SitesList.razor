@@ -5,6 +5,7 @@
 @using GestionSousSite.Components.Form
 @using GestionSousSite.Features.Configuration.Components
 @using GestionSousSite.Features.Pipelines.Components
+@using MudBlazor
 @inject PathsService PathsService
 @inject SitesService SitesService
 @inject AzureDevOpsService AzureDevOpsService
@@ -45,70 +46,103 @@
 {
     <p>Vous avez selectionner : @SelectedDrive.Label</p>
     <div class="tabs">
-        <button class="tab-button @(ActiveTab == "Infos" ? "active" : "")" @onclick='() => SwitchTab("Infos")'>AppSettings</button>
+        <button class="tab-button @(ActiveTab == "Infos" ? "active" : "")" @onclick='() => SwitchTab("Infos")'>Drive Infos</button>
         @if (SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
         {
             <button class="tab-button @(ActiveTab == "WebConfigPath" ? "active" : "")" @onclick='() => SwitchTab("WebConfigPath")'>WebConfig</button>
+            <button class="tab-button @(ActiveTab == "SousDomaine" ? "active" : "")" @onclick='() => SwitchTab("SousDomaine")'>SousDomaine (@(SousSites != null ? SousSites.Count : 0))</button>
+            <button class="tab-button @(ActiveTab == "Pipelines" ? "active" : "")" @onclick='() => SwitchTab("Pipelines")'>Pipelines ()</button>
         }
-        <button class="tab-button @(ActiveTab == "SousDomaine" ? "active" : "")" @onclick='() => SwitchTab("SousDomaine")'>SousDomaine (@(SousSites != null ? SousSites.Count : 0))</button>
-        <button class="tab-button @(ActiveTab == "Pipelines" ? "active" : "")" @onclick='() => SwitchTab("Pipelines")'>Pipelines ()</button>
     </div>
-    
+
     <div class="tab-content">
         @if (ActiveTab == "Infos")
         {
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Nom</th>
+                        <th>Config</th>
                         <th>Valeur</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
                         <td>Name</td>
                         <td>@SelectedDrive.Name</td>
+                        <td>@SelectedDrive.Name</td>
                     </tr>
                     <tr>
                         <td>Path</td>
                         <td>@SelectedDrive.Path</td>
-                    </tr>
-                    <tr>
-                        <td>DnsName</td>
-                        <td><a href="https://@SelectedDrive.DnsName" target="_blank">@SelectedDrive.DnsName</a></td>
-                    </tr>
-                    <tr>
-                        <td>Web.config ?</td>
-                        <td>
-                            @if (SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
+                        <td> 
+                            @if (!SelectedDrive.IsPathExist)
                             {
-                                <button class="btn btn-success"><span class="oi oi-circle-check"></span></button>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="InitializeDrive"
+                                StartIcon="@Icons.Material.Filled.Add"
+                                EndIcon="@Icons.Material.Filled.Add">
+                                    Initialiser le Drive
+                                </MudButton>
                             }
                             else
                             {
-                                <button class="btn btn-close"><span class="oi oi-circle-x"></span></button>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Success" OnClick="InitializeDrive"
+                                EndIcon="@Icons.Material.Filled.PlaylistAddCheck" Disabled="true">
+                                    Drive Initialiser
+                                </MudButton>
+
                             }
                         </td>
                     </tr>
                     <tr>
-                        <td>Branche</td>
-                        <td>@SelectedBranch</td>
+                        <td>DnsName</td>
+                        <td><MudLink Typo="Typo.body2" Href="@($"https://@SelectedDrive.DnsName")" Target="_blank">https://@SelectedDrive.DnsName</MudLink></td>
+                        <td>
+                            @if (!SelectedDrive.IsConfigured)
+                            {
+                                <MudTooltip Text="Web.config non trouvé, voulez-vous initialiser le dossier ?">
+                                    <MudButton Variant="@(SelectedDrive.IsConfigured ? Variant.Text : Variant.Filled)"
+                                    StartIcon="@Icons.Material.Filled.Dangerous"
+                                    EndIcon="@Icons.Material.Filled.Dangerous"
+                                    Color="@(ShowDrivePipelineRunner ? Color.Warning : Color.Error)"
+                                    Style="text-transform:none"
+                                    OnClick="InitializeDriveContent">
+                                        Initialiser ?
+                                    </MudButton>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Success"
+                                EndIcon="@Icons.Material.Filled.PlaylistAddCheck" Disabled="true">
+                                    Web.config présent
+                                </MudButton>
+                            }
+                        </td>
                     </tr>
+                    @if (ShowDrivePipelineRunner)
+                    {
+                        <tr>
+                            <td colspan="3">
+                                <DrivePipelineRunner />
+                            </td>
+                        </tr>
+                    }
                 </tbody>
             </table>
         }
-        @if (ActiveTab == "WebConfigPath")
+        @if (ActiveTab == "WebConfigPath" && SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
         {
-            @if (SelectedDrive.IsSiteConfigured(SelectedDrive.Path) && !string.IsNullOrEmpty(WebConfigPath))
+            @if (!string.IsNullOrEmpty(WebConfigPath))
             {
                 <WebConfig WebConfigPath="@WebConfigPath" />
             }
         }
-        @if (ActiveTab == "Pipelines")
+        @if (ActiveTab == "Pipelines" && SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
         {
             <PipelineViewer />
         }
-        @if (ActiveTab == "SousDomaine")
+        @if (ActiveTab == "SousDomaine" && SelectedDrive.IsSiteConfigured(SelectedDrive.Path))
         {
             <div>
                 <label>Nom du Sous-Site :</label>
@@ -117,9 +151,9 @@
             <div>
                 <label>Branche :</label>
                 <Autocomplete TItem="string"
-                              SearchMethod="LoadBranchesAsync"
-                              SuggestionDisplay="(branch => branch)"
-                              OnSelected="OnBranchSelected" />
+                SearchMethod="LoadBranchesAsync"
+                SuggestionDisplay="(branch => branch)"
+                OnSelected="OnBranchSelected" />
             </div>
             <div>
                 <button @onclick="CreateSubsite">Créer le Sous-Site</button>
@@ -169,7 +203,7 @@ else
     <p>Sélectionnez un DRIVE pour voir la liste des sous-sites.</p>
 }
 @code {
-
+    private bool ShowDrivePipelineRunner = false;
     private List<DrivePathInfo> AvailableDrives = new List<DrivePathInfo>();
     private DrivePathInfo? _selectedDrive;
     private string _selectedName = string.Empty;
@@ -268,22 +302,8 @@ else
 
     private async void OnBranchSelected(string branchName)
     {
-      await Task.Run(() => {
-        SelectedBranch = branchName;
-      });
-    }
-
-    private async void OnDriveSelected(string driveName)
-    {
-      await Task.Run(() => {
-            if (SelectedDriveName != driveName)
-            {
-                SelectedDriveName = driveName;
-            }
-            else
-            {
-                SelectedDriveName = string.Empty;
-            }
+        await InvokeAsync(() => {
+            SelectedBranch = branchName;
         });
     }
 
@@ -293,8 +313,9 @@ else
         if (SelectedDrive != null)
         {
             UserState.SetSelectedDrive(SelectedDrive);
+            StateHasChanged(); // Forcer la mise à jour
             SousSites = SitesService.GetSousSites(SelectedDrive);
-            InitializedBranches();
+            //InitializedBranches();
         }
     }
     private async Task OnDriveSelectionChangedAsync()
@@ -302,8 +323,10 @@ else
         if (SelectedDrive != null)
         {
             UserState.SetSelectedDrive(SelectedDrive);
+            StateHasChanged(); // Forcer la mise à jour
             SousSites = SitesService.GetSousSites(SelectedDrive);
-            await InitializedBranchesAsync();
+            //await InitializedBranchesAsync();
+            await Task.Run(() => { });
         }
     }
 
@@ -337,4 +360,91 @@ else
     {
         ActiveTab = tabName;
     }
+
+
+    private async Task OnDriveSelected(string driveName)
+    {
+        SelectedDriveName = driveName == SelectedDriveName ? string.Empty : driveName;
+
+        if (SelectedDrive != null)
+        {
+            UserState.SetSelectedDrive(SelectedDrive);
+            StatusMessage = $"Drive sélectionné : {SelectedDrive.Label}";
+            await LoadDriveDataAsync();
+        }
+        else
+        {
+            StatusMessage = "Aucun Drive sélectionné.";
+            SousSites.Clear();
+        }
+    }
+
+    private async Task LoadDriveDataAsync()
+    {
+        if (SelectedDrive != null)
+        {
+            try
+            {
+                SousSites = SitesService.GetSousSites(SelectedDrive);
+                //SelectedBranch = await AzureDevOpsService.GetBranchesAsync(SelectedDrive.Project, SelectedDrive.Repo).ContinueWith(t => t.Result.FirstOrDefault());
+                await Task.Run(()=>{ });
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Erreur lors du chargement des données du drive : {ex.Message}";
+            }
+        }
+    }
+
+    private async Task InitializeDrive()
+    {
+        if (SelectedDrive == null || string.IsNullOrEmpty(SelectedDrive.Path))
+        {
+            StatusMessage = "Aucun Drive sélectionné ou chemin invalide.";
+            return;
+        }
+
+        try
+        {
+            // Vérifier si le dossier existe déjà
+            if (Directory.Exists(SelectedDrive.Path))
+            {
+                StatusMessage = "Le dossier existe déjà.";
+                return;
+            }
+
+            // Créer le dossier et les sous-dossiers
+            Directory.CreateDirectory(SelectedDrive.Path);
+
+            // Vérifier si le dossier existe déjà
+            if (Directory.Exists(SelectedDrive.Path))
+            {
+                StatusMessage = "Le Drive a été initialisé avec succès.";
+                await RefreshDriveState();
+            }
+            else
+            {
+                StatusMessage = "Erreur Le Drive n'a oas été initialisé.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Erreur lors de l'initialisation du Drive : {ex.Message}";
+        }
+    }
+    private async Task RefreshDriveState()
+    {
+        if (SelectedDrive != null)
+        {
+            SousSites = SitesService.GetSousSites(SelectedDrive);
+        }
+        await Task.Run(() => { Thread.Sleep(1); });
+    }
+
+    private async Task InitializeDriveContent()
+    {
+        ShowDrivePipelineRunner = !ShowDrivePipelineRunner;
+        await Task.Run(() => { Thread.Sleep(1); });
+    }
+
 }
