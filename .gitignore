@@ -274,3 +274,4 @@ __pycache__/
 *.pyc
 /HLA.Admin/GestionSousSite/Config/paths.perso.json
 /HLA.Admin/GestionSousSite/appsettings.Development.json
+/HLA.Admin/GestionSousSite/Pipelines/azure-pipelines-test.yml
