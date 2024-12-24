@@ -275,3 +275,4 @@ __pycache__/
 /HLA.Admin/GestionSousSite/Config/paths.perso.json
 /HLA.Admin/GestionSousSite/appsettings.Development.json
 /HLA.Admin/GestionSousSite/Pipelines/azure-pipelines-test.yml
+/Certs/local/powershell_local_autosigned.cer
